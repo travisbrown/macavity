@@ -7,8 +7,9 @@ import cats.syntax.traverse._
 import io.macavity.data.{ StateT => MStateT }
 import java.util.concurrent.TimeUnit
 import org.openjdk.jmh.annotations._
+import scala.concurrent.{ Await, Future }
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
+import scala.concurrent.duration._
 
 /**
  * Compare the performance of encoding operations.
@@ -21,14 +22,14 @@ import scala.concurrent.Future
 @BenchmarkMode(Array(Mode.Throughput))
 @OutputTimeUnit(TimeUnit.SECONDS)
 class StateTBenchmark {
-  val values: List[Int] = (0 to 10000).toList
+  val values: List[Int] = (0 to 2000).toList
 
   def cStateT(value: Int): CStateT[Future, Int, Int] = CStateT(i => Future((i + 1, value + i)))
   def mStateT(value: Int): MStateT[Future, Int, Int] = MStateT(i => Future((i + 1, value + i)))
 
   @Benchmark
-  def traverseStateC: CStateT[Future, Int, List[Int]] = values.traverseU(cStateT)
+  def traverseStateC: List[Int] = Await.result(values.traverseU(cStateT).runA(0), 2.seconds)
 
   @Benchmark
-  def traverseStateM: MStateT[Future, Int, List[Int]] = values.traverseU(mStateT)
+  def traverseStateM: List[Int] = Await.result(values.traverseU(mStateT).runA(0), 2.seconds)
 }
