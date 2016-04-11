@@ -11,23 +11,24 @@ initial [experiments][finch-559] suggest that the overhead the version in Cats
 would introduce would not be consistent with Finch's goals.
 
 The `StateT` implementation provided by this project is mostly source-compatible
-with Cats's, but it relies on the context it transforms for stack safety, and it
+with Cats's, but it takes a different approach to providing stack safety, and it
 uses methods in places where the Cats version uses `FunctionN` values. The
 initial benchmarks suggest that this approach may get us closer to something
 that would work for Finch (higher numbers are better):
 
 ```
-Benchmark                        Mode  Cnt     Score    Error  Units
-StateTBenchmark.traverseStateC  thrpt   40  1780.449 ± 55.364  ops/s
-StateTBenchmark.traverseStateM  thrpt   40  4837.596 ± 65.619  ops/s
+Benchmark                        Mode  Cnt    Score   Error  Units
+StateTBenchmark.traverseStateC  thrpt   40   61.313 ± 0.507  ops/s
+StateTBenchmark.traverseStateM  thrpt   40  131.301 ± 1.728  ops/s
 ```
 
 And allocation rates (lower is better):
 
 ```
-Benchmark                                           Mode  Cnt        Score    Error   Units
-StateTBenchmark.traverseStateC:gc.alloc.rate.norm  thrpt   20  3520793.273 ±  2.444    B/op
-StateTBenchmark.traverseStateM:gc.alloc.rate.norm  thrpt   20  1360345.495 ±  3.760    B/op
+Benchmark                                           Mode  Cnt         Score     Error   Units
+
+StateTBenchmark.traverseStateC:gc.alloc.rate.norm  thrpt   20  19767449.565 ±  50.382    B/op
+StateTBenchmark.traverseStateM:gc.alloc.rate.norm  thrpt   20  13126749.061 ±  27.103    B/op
 ```
 
 ## Status

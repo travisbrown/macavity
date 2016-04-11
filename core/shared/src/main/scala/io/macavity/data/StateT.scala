@@ -6,18 +6,19 @@ import cats.{ Applicative, FlatMap, Functor, Monad, MonadState, TransLift }
 abstract class StateT[F[_], S, A] extends Serializable { self =>
   def run(initial: S): F[(S, A)]
 
-  final def flatMap[B](f: A => StateT[F, S, B])(implicit F: FlatMap[F]): StateT[F, S, B] =
-    new StateT[F, S, B] {
-      final def run(initial: S): F[(S, B)] = F.flatMap(self.run(initial)) {
-        case (s, a) => f(a).run(s)
-      }
+  protected final def step(implicit F: FlatMap[F]): StateT[F, S, A] = self match {
+    case outer: StateT.Bind[F, S, _, A] => outer.fa match {
+      case inner: StateT.Bind[F, S, _, _] => inner.fa.flatMap(x => inner.ff(x).flatMap(outer.ff)).step
+      case _ => self
     }
-
-  final def map[B](f: A => B)(implicit F: FlatMap[F]): StateT[F, S, B] = new StateT[F, S, B] {
-    final def run(initial: S): F[(S, B)] = F.map(self.run(initial)) {
-      case (s, a) => (s, f(a))
-    }
+    case _ => self
   }
+
+  final def flatMap[B](f: A => StateT[F, S, B])(implicit F: FlatMap[F]): StateT[F, S, B] =
+    new StateT.Bind(self, f, F)
+
+  final def map[B](f: A => B)(implicit F: Monad[F]): StateT[F, S, B] =
+    new StateT.Bind(self, (a: A) => StateT.pure[F, S, B](f(a)), F)
 
   /**
    * Run with the provided initial state value and return the final state
@@ -100,13 +101,34 @@ abstract class StateT[F[_], S, A] extends Serializable { self =>
   }
 }
 
-final object StateT {
+final object StateT { self =>
+  private[data] class Bind[F[_], S, A, B](
+    final val fa: StateT[F, S, A],
+    final val ff: A => StateT[F, S, B],
+    F: FlatMap[F]
+  ) extends StateT[F, S, B] {
+    final def run(initial: S): F[(S, B)] = step(F) match {
+      case bind: Bind[F, S, A, B] => F.flatMap(bind.fa.run(initial)) {
+        case (s, a) => bind.ff(a).run(s)
+      }
+      case other => other.run(initial)
+    }
+  }
+
   def apply[F[_], S, A](f: S => F[(S, A)]): StateT[F, S, A] = new StateT[F, S, A] {
     final def run(initial: S): F[(S, A)] = f(initial)
   }
 
   def pure[F[_], S, A](a: A)(implicit F: Applicative[F]): StateT[F, S, A] = new StateT[F, S, A] {
     final def run(initial: S): F[(S, A)] = F.pure((initial, a))
+  }
+
+  def get[F[_], S](implicit F: Applicative[F]): StateT[F, S, S] = new StateT[F, S, S] {
+    final def run(initial: S): F[(S, S)] = F.pure((initial, initial))
+  }
+
+  def set[F[_], S](s: S)(implicit F: Applicative[F]): StateT[F, S, Unit] = new StateT[F, S, Unit] {
+    final def run(initial: S): F[(S, Unit)] = F.pure((s, ()))
   }
 
   implicit def stateTMonadState[F[_], S](implicit
@@ -116,12 +138,8 @@ final object StateT {
       final def pure[A](a: A): StateT[F, S, A] = StateT.pure(a)
       final override def map[A, B](fa: StateT[F, S, A])(f: A => B): StateT[F, S, B] = fa.map(f)
       final def flatMap[A, B](fa: StateT[F, S, A])(f: A => StateT[F, S, B]): StateT[F, S, B] = fa.flatMap(f)
-      final val get: StateT[F, S, S] = new StateT[F, S, S] {
-        final def run(initial: S): F[(S, S)] = F.pure((initial, initial))
-      }
-      final def set(s: S): StateT[F, S, Unit] = new StateT[F, S, Unit] {
-        final def run(initial: S): F[(S, Unit)] = F.pure((s, ()))
-      }
+      final val get: StateT[F, S, S] = self.get
+      final def set(s: S): StateT[F, S, Unit] = self.set(s)
     }
 
   implicit def stateTLift[S]: TransLift.Aux[({ type L[f[_], x] = StateT[f, S, x] })#L, Applicative] =
