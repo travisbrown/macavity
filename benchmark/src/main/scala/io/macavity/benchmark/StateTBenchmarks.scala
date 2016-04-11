@@ -22,10 +22,10 @@ import scala.concurrent.duration._
 @BenchmarkMode(Array(Mode.Throughput))
 @OutputTimeUnit(TimeUnit.SECONDS)
 class StateTBenchmark {
-  val values: List[Int] = (0 to 2000).toList
+  val values: List[Int] = (0 to 10000).toList
 
-  def cStateT(value: Int): CStateT[Future, Int, Int] = CStateT(i => Future((i + 1, value + i)))
-  def mStateT(value: Int): MStateT[Future, Int, Int] = MStateT(i => Future((i + 1, value + i)))
+  def cStateT(value: Int): CStateT[Future, Int, Int] = CStateT(i => Future.successful((i + 1, value + i)))
+  def mStateT(value: Int): MStateT[Future, Int, Int] = MStateT(i => Future.successful((i + 1, value + i)))
 
   @Benchmark
   def traverseStateC: List[Int] = Await.result(values.traverseU(cStateT).runA(0), 2.seconds)
